@@ -62,6 +62,7 @@ unsigned int proxychains_max_chain = 1;
 unsigned int remote_dns_subnet = 224;
 
 char log_file[1024] = { 0 };
+char resource_ip[32] = { 0 };
 
 localaddr_arg localnet_addr[MAX_LOCALNET];
 chain_type proxychains_ct;
@@ -305,6 +306,8 @@ static void get_chain_data(proxy_data * pd, unsigned int *proxy_count, chain_typ
 					proxychains_quiet_mode = 1;
 				} else if(strstr(buff, "log_file")) {
 					sscanf(buff, "%s %s", user, log_file);
+				} else if(strstr(buff, "resource_ip")) {
+					sscanf(buff, "%s %s", user, resource_ip);
 				} else if(strstr(buff, "proxy_dns")) {
 					proxychains_resolver = 1;
 				} else if(strstr(buff, "dnat")) {

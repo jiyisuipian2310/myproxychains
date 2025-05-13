@@ -49,6 +49,7 @@ pthread_mutex_t internal_getsrvbyname_lock;
 #include "common.h"
 
 extern char log_file[1024];
+extern char resource_ip[32];
 
 extern int tcp_read_time_out;
 extern int tcp_connect_time_out;
@@ -571,7 +572,12 @@ static int start_chain_ex(int *fd, proxy_data * pd, ip_type target_ip, unsigned 
 	//begin add by yull
 	//here we add proxy00{\"dstip\":\"192.168.1.100\",\"dstport\":8080,\"dstdomain\":\"\"}
 	char szProxyData[512] = { 0 } ;
-	sprintf(szProxyData, "proxy00{\"dstip\":\"%s\",\"dstport\":%d,\"dstdomain\":\"\"}", ip_buf, target_port);
+	if(resource_ip[0] != '\0') {
+		sprintf(szProxyData, "proxy00{\"dstip\":\"%s\",\"dstport\":%d,\"dstdomain\":\"\"}", resource_ip, target_port);
+	} else {
+		sprintf(szProxyData, "proxy00{\"dstip\":\"%s\",\"dstport\":%d,\"dstdomain\":\"\"}", ip_buf, target_port);
+	}
+	
 	int jsondata_len = strlen(szProxyData) - 7;
 	proxychains_write_log(LOG_PREFIX "proxyData: %s, jsondata_len: %d\n", szProxyData+7, jsondata_len);
 	unsigned short nsonlen = htons(jsondata_len); //网络字节序
