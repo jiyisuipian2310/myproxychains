@@ -535,10 +535,6 @@ static int start_chain(int *fd, proxy_data * pd, char *begin_mark) {
 	}
 	pd->ps = BUSY_STATE;
 
-	//begin add by yull
-	//here we add {\"dstip\":\"192.168.1.100\",\"dstport\":8080,\"dstdomain\":\"\"}
-	//end add by yull
-
 	return SUCCESS;
 	error1:
 	proxychains_write_log(LOG_PREFIX "connect to proxy %s:%d timeout\n",ip_buf, htons(pd->port));
@@ -556,12 +552,17 @@ static int start_chain_ex(int *fd, proxy_data * pd, ip_type target_ip, unsigned 
 	if(*fd == -1)
 		goto error;
 
+	//inet_ntop(AF_INET, &pd->ip.octet[0], ip_buf, sizeof(ip_buf));
 	inet_ntop(AF_INET, &target_ip.octet[0], ip_buf, sizeof(ip_buf));
+
 	proxychains_write_log(LOG_PREFIX "begin connect to proxyAddr %s:%d\n",ip_buf, htons(pd->port));
 	pd->ps = PLAY_STATE;
 	memset(&addr, 0, sizeof(addr));
 	addr.sin_family = AF_INET;
+
+	//addr.sin_addr.s_addr = (in_addr_t) pd->ip.as_int;
 	addr.sin_addr.s_addr = (in_addr_t) target_ip.as_int;
+
 	addr.sin_port = pd->port;
 	if(timed_connect(*fd, (struct sockaddr *) &addr, sizeof(addr))) {
 		pd->ps = DOWN_STATE;
@@ -570,6 +571,7 @@ static int start_chain_ex(int *fd, proxy_data * pd, ip_type target_ip, unsigned 
 	pd->ps = BUSY_STATE;
 
 	//begin add by yull
+	//在代理信息中, 将上层应用中connect参数中的ip作为dstip
 	//here we add proxy00{\"dstip\":\"192.168.1.100\",\"dstport\":8080,\"dstdomain\":\"\"}
 	char szProxyData[512] = { 0 } ;
 	if(resource_ip[0] != '\0') {
@@ -577,6 +579,52 @@ static int start_chain_ex(int *fd, proxy_data * pd, ip_type target_ip, unsigned 
 	} else {
 		sprintf(szProxyData, "proxy00{\"dstip\":\"%s\",\"dstport\":%d,\"dstdomain\":\"\"}", ip_buf, target_port);
 	}
+	
+	int jsondata_len = strlen(szProxyData) - 7;
+	proxychains_write_log(LOG_PREFIX "proxyData: %s, jsondata_len: %d\n", szProxyData+7, jsondata_len);
+	unsigned short nsonlen = htons(jsondata_len); //网络字节序
+	memcpy(szProxyData+5, &nsonlen, 2);
+	write(*fd, szProxyData, jsondata_len+7);
+	//end add by yull
+
+	return SUCCESS;
+	error1:
+	proxychains_write_log(LOG_PREFIX "connect to proxy %s:%d timeout\n",ip_buf, htons(pd->port));
+	error:
+	if(*fd != -1)
+		close(*fd);
+	return SOCKET_ERROR;
+}
+
+static int start_chain_ex2(int *fd, proxy_data * pd, ip_type resource_ip, unsigned short resource_port, char *begin_mark) {
+	struct sockaddr_in addr;
+	char ip_buf[16];
+	char resource_ip_buf[16];
+
+	*fd = socket(PF_INET, SOCK_STREAM, 0);
+	if(*fd == -1)
+		goto error;
+
+	inet_ntop(AF_INET, &pd->ip.octet[0], ip_buf, sizeof(ip_buf));
+	proxychains_write_log(LOG_PREFIX "begin connect to proxyAddr %s:%d\n",ip_buf, htons(pd->port));
+	pd->ps = PLAY_STATE;
+	memset(&addr, 0, sizeof(addr));
+	addr.sin_family = AF_INET;
+	addr.sin_addr.s_addr = (in_addr_t) pd->ip.as_int;
+	addr.sin_port = pd->port;
+	if(timed_connect(*fd, (struct sockaddr *) &addr, sizeof(addr))) {
+		pd->ps = DOWN_STATE;
+		goto error1;
+	}
+	pd->ps = BUSY_STATE;
+
+	//begin add by yull
+	//在代理信息中, 将上层应用中connect参数中的ip作为dstip
+	//here we add proxy00{\"dstip\":\"192.168.1.100\",\"dstport\":8080,\"dstdomain\":\"\"}
+	inet_ntop(AF_INET, &resource_ip.octet[0], resource_ip_buf, sizeof(resource_ip_buf));
+
+	char szProxyData[512] = { 0 } ;
+	sprintf(szProxyData, "proxy00{\"dstip\":\"%s\",\"dstport\":%d,\"dstdomain\":\"\"}", resource_ip_buf, resource_port);
 	
 	int jsondata_len = strlen(szProxyData) - 7;
 	proxychains_write_log(LOG_PREFIX "proxyData: %s, jsondata_len: %d\n", szProxyData+7, jsondata_len);
@@ -757,7 +805,7 @@ int connect_proxy_chain(int sock, ip_type target_ip,
 			}
 			//modify by yull
 			//if(SUCCESS != start_chain(&ns, p1, ST)) {
-			if(SUCCESS != start_chain_ex(&ns, p1, target_ip, ntohs(target_port), ST)) {
+			if(SUCCESS != start_chain_ex2(&ns, p1, target_ip, ntohs(target_port), ST)) {
 				PDEBUG("start_chain failed\n");
 				goto error_strict;
 			}
